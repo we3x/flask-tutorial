@@ -4,10 +4,21 @@ from flask import Flask, render_template
 from flask_admin import Admin
 from flask_admin.contrib.peewee import ModelView
 from flask_bootstrap import Bootstrap
+from flask_security import (
+    Security,
+    PeeweeUserDatastore,
+    UserMixin,
+    RoleMixin,
+    login_required,
+)
 from peewee import (
     SqliteDatabase,
     Model,
     CharField,
+    TextField,
+    BooleanField,
+    DateTimeField,
+    ForeignKeyField,
     create_model_tables,
 )
 
@@ -24,9 +35,32 @@ class BaseModel(Model):
         database = db
 
 
-class User(BaseModel):
-    username = CharField()
-    email = CharField()
+class Role(BaseModel, RoleMixin):
+    name = CharField(unique=True)
+    description = TextField(null=True)
+
+
+class User(BaseModel, UserMixin):
+    email = TextField()
+    password = TextField()
+    active = BooleanField(default=True)
+    confirmed_at = DateTimeField(null=True)
+
+
+class UserRoles(BaseModel):
+    user = ForeignKeyField(User, related_name='roles')
+    role = ForeignKeyField(Role, related_name='users')
+    name = property(lambda self: self.role.name)
+    description = property(lambda self: self.role.description)
+
+
+user_datastore = PeeweeUserDatastore(db, User, Role, UserRoles)
+security = Security(app, user_datastore)
+
+try:
+    user_datastore.create_user(email='admin@example.com', password='Sekrit')
+except:
+    pass
 
 
 @app.before_request
@@ -40,7 +74,7 @@ def db_close(exc):
         db.close()
 
 
-models = [User]
+models = (Role, User, UserRoles)
 create_model_tables(models, fail_silently=True)
 
 for model in models:
@@ -48,8 +82,9 @@ for model in models:
 
 
 @app.route('/')
+@login_required
 def home():
-    user_in_python = User.get(username='meka')
+    user_in_python = User.get(email='admin@example.com')
     return render_template('index.html', user_in_template=user_in_python)
 
 

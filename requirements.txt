@@ -1,3 +1,4 @@
 flask-admin
 flask-bootstrap
+flask-security
 peewee
